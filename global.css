@@ -1,0 +1,56 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@layer theme {
+  @theme {
+    --color-background: #f2f2f2;
+    --color-background-element: #ffffff;
+    --color-background-selected: #e0e1e0;
+    --color-foreground: #000000;
+    --color-foreground-secondary: #60646c;
+
+    --font-display:
+      Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
+      Segoe UI Symbol, Noto Color Emoji;
+    --font-mono:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
+    --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
+    --font-serif: Georgia, 'Times New Roman', serif;
+    /* App text face. Redefined per platform below: the system font on iOS,
+       Google Sans Flex (bundled via the expo-font plugin) on Android. */
+    --font-app: system-ui;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Keep in step with Colors.dark in constants/theme.ts - these are the untinted
+       fallbacks used before ThemeVariablesProvider supplies the accent-tinted values. */
+    --color-background: #0d0d0d;
+    --color-background-element: #242424;
+    --color-background-selected: #333333;
+    --color-foreground: #ffffff;
+    --color-foreground-secondary: #b0b4ba;
+  }
+}
+
+@media android {
+  :root {
+    --font-app: 'Google Sans Flex';
+    --font-mono: monospace;
+    --font-rounded: normal;
+    --font-serif: serif;
+    --font-sans: normal;
+  }
+}
+
+@media ios {
+  :root {
+    --font-app: system-ui;
+    --font-mono: ui-monospace;
+    --font-serif: ui-serif;
+    --font-sans: system-ui;
+    --font-rounded: ui-rounded;
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "expo-system-accent",
+  "version": "1.0.0",
+  "description": "Reads Android's Material You dynamic color palette (the wallpaper seed color).",
+  "main": "index.ts",
+  "private": true
+}
