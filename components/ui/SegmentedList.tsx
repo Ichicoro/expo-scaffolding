@@ -1,8 +1,8 @@
-import { useTheme } from '@/hooks/use-theme';
+import { useResolvedThemeMode, useTheme } from '@/hooks/use-theme';
 import { Pressable, Text, View } from '@/tw';
 import { SymbolView } from 'expo-symbols';
 import React, { Children, isValidElement } from 'react';
-import { Platform, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, type ViewStyle } from 'react-native';
 
 interface SegmentedListProps {
   children: React.ReactNode;
@@ -68,6 +68,10 @@ function flattenRows(children: React.ReactNode): React.ReactElement[] {
 
 export function SegmentedList({ children, className }: SegmentedListProps) {
   const items = flattenRows(children);
+  // Taken from the resolved theme rather than a `dark:` class: the hairline has to lighten
+  // on a dark card, and a black one over #242424 is the black bar this used to draw.
+  const separatorColor =
+    useResolvedThemeMode() === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
 
   // Android groups its rows as gapped cards, so there is nothing to clip at the group
   // level and no divider to bridge — each row rounds and clips itself.
@@ -84,8 +88,12 @@ export function SegmentedList({ children, className }: SegmentedListProps) {
   }
 
   return (
+    // The group paints the card color itself, not just the rows: row heights land on
+    // fractional pixels, so two opaque rows can leave a hairline of the container showing
+    // between them, and an unpainted container is the page behind the list — a black seam
+    // that comes and goes with the rows' measured heights.
     <View
-      className={`rounded-[20px] overflow-hidden ${className ?? ''}`}
+      className={`rounded-[20px] overflow-hidden bg-background-element ${className ?? ''}`}
       style={{ borderCurve: 'continuous' }}
     >
       {items.map((child, i) => {
@@ -105,10 +113,19 @@ export function SegmentedList({ children, className }: SegmentedListProps) {
         return (
           <React.Fragment key={i}>
             {i > 0 && (
-              <View
-                className={bridgeColor ? 'h-px' : 'h-px bg-black/8 dark:bg-black/8'}
-                style={bridgeColor ? { backgroundColor: bridgeColor } : undefined}
-              />
+              // The divider sits on a strip of the card background, inset by the row's own
+              // horizontal padding so it lines up with the row's content the way UIKit's
+              // grouped separators do. A bridge spans the full width instead — an inset one
+              // would cut the selected block with two notches of unselected background.
+              <View className={bridgeColor ? undefined : 'bg-background-element'}>
+                <View
+                  className={bridgeColor ? undefined : 'mx-4'}
+                  style={{
+                    height: StyleSheet.hairlineWidth,
+                    backgroundColor: bridgeColor ?? separatorColor,
+                  }}
+                />
+              </View>
             )}
             {child}
           </React.Fragment>
@@ -149,38 +166,43 @@ export function SegmentedRow({
   // row matches that so the list keeps one rhythm.
   const metrics = Platform.OS === 'android' ? 'px-4 py-3 min-h-[56px]' : 'px-4 py-3 min-h-[44px]';
 
-  const inner = (
-    <View
-      className={`flex-row items-center ${metrics} ${
-        selected ? '' : 'bg-background-element'
-      } ${disabled ? 'opacity-40' : ''} justify-between grow`}
-      style={selected ? { backgroundColor: selectedColor } : undefined}
-    >
-      {leading && (
-        <View className="flex-col justify-center w-fit me-3">
-          {typeof leading === 'string' ? (
-            <Text
-              className={`${
-                destructive ? 'text-red-500 dark:text-red-400' : 'text-foreground'
-              }`}
-            >
-              {leading}
-            </Text>
-          ) : (
-            leading
-          )}
-        </View>
-      )}
-      {/* No alignment class in the default branch on purpose: content stretches to the
-          row's width, which is what fields overlaid with an icon rely on. */}
-      {children && (
-        <View className={`flex-1 ${centerContent ? 'items-center' : ''}`}>
-          {children}
-        </View>
-      )}
-      {trailing && <View className="ml-2 items-end">{trailing}</View>}
-    </View>
-  );
+  // HIG: a tapped row highlights by swapping its fill and keeping its content at full
+  // strength, rather than fading the row out. The fade also stopped reading at all once
+  // the group began painting the card color behind the rows — the row dissolved into an
+  // identical background. Only rows that respond to a tap take the highlight.
+  const inner = (pressed = false) => {
+    const fill = selected ? selectedColor : pressed ? theme.backgroundSelected : undefined;
+    return (
+      <View
+        className={`flex-row items-center ${metrics} ${fill ? '' : 'bg-background-element'
+          } ${disabled ? 'opacity-40' : ''} justify-between grow`}
+        style={fill ? { backgroundColor: fill } : undefined}
+      >
+        {leading && (
+          <View className="flex-col justify-center w-fit me-3">
+            {typeof leading === 'string' ? (
+              <Text
+                className={`${destructive ? 'text-red-500 dark:text-red-400' : 'text-foreground'
+                  }`}
+              >
+                {leading}
+              </Text>
+            ) : (
+              leading
+            )}
+          </View>
+        )}
+        {/* No alignment class in the default branch on purpose: content stretches to the
+            row's width, which is what fields overlaid with an icon rely on. */}
+        {children && (
+          <View className={`flex-1 ${centerContent ? 'items-center' : ''}`}>
+            {children}
+          </View>
+        )}
+        {trailing && <View className="ml-2 items-end">{trailing}</View>}
+      </View>
+    );
+  };
 
   if ((onPress || onLongPress) && !disabled) {
     return (
@@ -191,13 +213,12 @@ export function SegmentedRow({
         // sits above the Pressable's, which is where a background ripple would land. Its
         // color follows the text so it stays visible on a dark surface.
         android_ripple={{ color: `${theme.text}1f`, foreground: true }}
-        style={({ pressed }) => [{ opacity: pressed && Platform.OS === 'ios' ? 0.6 : 1 }]}
       >
-        {inner}
+        {({ pressed }) => inner(Platform.OS === 'ios' && pressed)}
       </Pressable>
     );
   }
-  return inner;
+  return inner();
 }
 
 export function Chevron({ color, rotation }: { color?: string, rotation?: number }) {
@@ -214,9 +235,8 @@ export function Chevron({ color, rotation }: { color?: string, rotation?: number
 export function SectionTitle({ children, first }: { children: string; first?: boolean }) {
   return (
     <Text
-      className={`text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 ${
-        first ? 'mb-3' : 'mt-5 mb-3'
-      } px-1`}
+      className={`text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 ${first ? 'mb-3' : 'mt-5 mb-3'
+        } px-1`}
     >
       {children}
     </Text>
